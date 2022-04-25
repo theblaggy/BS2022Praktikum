@@ -1,8 +1,8 @@
 //
-// Created by Lucas Tiedtke on 01.04.22.
+// Created by Lucas Tiedtke on 26.03.22.
 //
 
-#ifndef BS2022PRAKTIKUM_MAIN_H
-#define BS2022PRAKTIKUM_MAIN_H
+#ifndef PRAKTIKUM_MAIN_H
+#define PRAKTIKUM_MAIN_H
 
-#endif //BS2022PRAKTIKUM_MAIN_H
+#endif //PRAKTIKUM_MAIN_H
