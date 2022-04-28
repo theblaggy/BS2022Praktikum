@@ -8,28 +8,37 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define socket_t int
 #define BUF 1024
 
 int main() {
-
-    int server = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-
+    socket_t server, client;
     const int opt = 1;
+    struct sockaddr_in addr;
+    unsigned int len;
+    char *buffer;
+
+    // create
+    server = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    struct sockaddr_in addr;
+    // bind
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(5678);
     bind(server, (struct sockaddr *) &addr, sizeof(addr));
 
+    // listen
     listen(server, 1);
 
-    unsigned int len = sizeof(addr);
-    int client = accept(server, (struct sockaddr *)&addr, &len);
+    // accept
+    len = sizeof(addr);
+    client = accept(server, (struct sockaddr *)&addr, &len);
 
-    char *buffer = (char *) malloc(BUF);
+    // allocate buffer
+    buffer = (char *) malloc(BUF);
 
+    // run loop
     while (1) {
         send(client, ">>> ", 4, 0);
         recv(client, buffer, BUF - 1, 0);
