@@ -1,66 +1,39 @@
 //
-// Created by Lucas Tiedtke on 26.03.22.
+// Created by Lucas Tiedtke on 28.04.22.
 //
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <signal.h>
-#include <sys/sem.h>
-#include <sys/shm.h>
-
-#include "keyValueStore.h"
-#include "socket.h"
-#include "sub.h"
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #define BUF 1024
 
-union semun {
-    int val;
-    struct semid_ds *buf;
-    unsigned short *array;
-};
-
 int main() {
-    socket_t server, client;
+
+    int server = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+
+    const int opt = 1;
+    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(5678);
+    bind(server, (struct sockaddr *) &addr, sizeof(addr));
+
+    listen(server, 1);
+
+    unsigned int len = sizeof(addr);
+    int client = accept(server, (struct sockaddr *)&addr, &len);
+
     char *buffer = (char *) malloc(BUF);
 
-    int semid;
-    union semun sunion;
-
-    semid = semget(IPC_PRIVATE, 1, IPC_CREAT | IPC_RMID | SHM_R | SHM_W);
-    if (semid == -1)
-        fprintf(stderr, "Failed to create sem");
-
-    sunion.val = 1;
-    if (semctl(IPC_PRIVATE, 0, SETVAL, sunion) < 0)
-        fprintf(stderr, "Failed to init sem");
-
-    init_datastore();
-
-    server = create_socket();
-    bind_socket(&server);
-    listen_socket(&server);
-
-    sighandler(SIGCHLD, wait_children);
-
-    do {
-        accept_socket(&server, &client);
-        if (fork() == 0) { // inside child process
-            close_socket(&server);
-            do {
-                send_socket(&client, ">>> ", 4);
-                receive_socket(&client, buffer, BUF - 1);
-                execute(buffer, client, semid);
-            } while (strcmp(buffer, "QUIT") != 0);
-            close_socket(&client);
-        }
-        close_socket(&client);
-    } while (strcmp(buffer, "\n") != 0);
-
-    close_socket(&server);
-    deinit_datastore();
-    free(buffer);
-    return EXIT_SUCCESS;
+    while (1) {
+        send(client, ">>> ", 4, 0);
+        recv(client, buffer, BUF - 1, 0);
+        send(client, buffer, strlen(buffer), 0);
+        memset(buffer, 0, strlen(buffer));
+    }
 }
