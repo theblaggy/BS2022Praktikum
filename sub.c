@@ -56,7 +56,6 @@ void execute(char *buffer, socket_t client, int semid) {
             strcat(buffer, cmd->key);
             strcat(buffer, ":");
             strcat(buffer, cmd->value);
-            strcat(buffer, cmd_buffer);
             strcat(buffer, "\n");
             send_socket(&client, buffer, strlen(buffer));
             break;
