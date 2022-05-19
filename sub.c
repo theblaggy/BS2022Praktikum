@@ -65,7 +65,7 @@ void execute(char *buffer, socket_t client, int semid) {
             else
                 strcpy(cmd_buffer, "key_deleted");
 
-            strcpy(buffer, "GET");
+            strcpy(buffer, "DEL");
             strcat(buffer, ":");
             strcat(buffer, cmd->key);
             strcat(buffer, ":");
