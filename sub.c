@@ -85,6 +85,8 @@ void execute(char *buffer, socket_t client, int semid) {
         case SUB:
             if (safeget(cmd->key, cmd_buffer, semid) < 0)
                 strcpy(cmd_buffer, "key_nonexistent");
+            else
+                addsub(cmd->key, client);
 
             strcpy(buffer, "SUB");
             strcat(buffer, ":");

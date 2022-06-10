@@ -9,17 +9,31 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/sem.h>
+#include <sys/msg.h>
 
 #include "keyValueStore.h"
+#include "socket.h"
+#include "sub.h"
 
 #define DS 1024
 
 typedef struct {
+    int msqid;
+    socket_t client;
+} sub;
+
+typedef struct {
     char key[64];
     char value[64];
+    sub sub;
 } item;
 
 item *datastore;
+
+struct message {
+    long int type;
+    char text[64];
+};
 
 struct sembuf p = { 0, -1, SEM_UNDO };
 struct sembuf v = { 0, +1, SEM_UNDO };
@@ -62,14 +76,25 @@ int put(char *key, char *value) {
 //        fprintf(stderr, "Entry failed\n");
 //        return 1;
 //    }
-    item itm;
-    strcpy(itm.key, key);
-    strcpy(itm.value, value);
 
     int i;
     for (i = 0; i < DS / sizeof(ENTRY); i++) { // search key to overwrite
         if (strcmp(datastore[i].key, key) == 0) {
             strcpy(datastore[i].value, value);
+
+            if (datastore[i].sub.msqid != -1 && datastore[i].sub.client != -1) {
+                struct message msg;
+                msg.type = 1;
+                strcpy(msg.text, "PUT");
+                strcat(msg.text, ":");
+                strcat(msg.text, datastore[i].key);
+                strcat(msg.text, ":");
+                strcat(msg.text, datastore[i].value);
+                strcat(msg.text, "\n");
+                if (msgsnd(datastore[i].sub.msqid, &msg, sizeof(msg.text), 0) < 0)
+                    error_exit("Failed to send message");
+            }
+
             return 1; // updated old
         }
     }
@@ -77,6 +102,8 @@ int put(char *key, char *value) {
         if (datastore[i].value[0] == '\0') {
             strcpy(datastore[i].key, key);
             strcpy(datastore[i].value, value);
+            datastore[i].sub.msqid = -1;
+            datastore[i].sub.client = -1;
             return 0; // added new
         }
     }
@@ -117,6 +144,20 @@ int del(char *key) {
             return -1;
         if (strcmp(datastore[i].key, key) == 0 && datastore[i].value[0] != '\0') {
             datastore[i].value[0] = '\0';
+
+            if (datastore[i].sub.msqid != -1 && datastore[i].sub.client != -1) {
+                struct message msg;
+                msg.type = 1;
+                strcpy(msg.text, "DEL");
+                strcat(msg.text, ":");
+                strcat(msg.text, datastore[i].key);
+                strcat(msg.text, ":");
+                strcat(msg.text, "key_deleted");
+                strcat(msg.text, "\n");
+                if (msgsnd(datastore[i].sub.msqid, &msg, sizeof(msg.text), 0) < 0)
+                    error_exit("Failed to send message");
+            }
+
             break;
         }
     }
@@ -163,4 +204,37 @@ int safedel(char *key, int semid) {
     if (!ta)
         semop(semid, &v, 1);
     return ret;
+}
+
+int addsub(char *key, socket_t client) {
+
+    int i;
+    for (i = 0; i < DS / sizeof(ENTRY); i++) {
+        if (datastore[i].key[0] == '\0')
+            return -1;
+        if (strcmp(datastore[i].key, key) == 0 && datastore[i].value[0] != 0) {
+            // add sub
+            if ((datastore[i].sub.msqid = msgget(IPC_PRIVATE, IPC_CREAT | SHM_R | SHM_W)) < 0) {
+                error_exit("Failed to create message queue");
+            }
+            datastore[i].sub.client = client;
+
+            // wait to receive
+            // send pub
+
+            if (fork() == 0) {
+                struct message msg;
+                msg.type = 1;
+                while (getppid() != 1) {
+                    if (msgrcv(datastore[i].sub.msqid, &msg, sizeof(msg.text), 1, IPC_NOWAIT) >= 0) {
+                        send_socket(&client, msg.text, strlen(msg.text));
+                    }
+                }
+                close_socket(&client);
+            }
+
+            break;
+        }
+    }
+    return 0;
 }
